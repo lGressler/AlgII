@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
-#include "products.h"
-#include "accesses.h"
+#include "produtos/products.h"
+#include "acessos/accesses.h"
+#include "acessos/accesses.c"
 
 #define DATASET_FOLDER "datasets/"
 #define CSV_EXTENSION ".csv"

@@ -18,7 +18,12 @@ void create_index(const char *data_filename, const char *index_filename) {
     while (fread(&p, sizeof(Product), 1, data_file)) {
         entry.key = p.product_id;
         entry.offset = offset;
-        fwrite(&entry, sizeof(IndexEntry), 1, index_file);
+        if (fwrite(&entry, sizeof(IndexEntry), 1, index_file) != 1) {
+            perror("Erro ao escrever no arquivo de índice");
+            fclose(data_file);
+            fclose(index_file);
+            return;
+        }
         offset += sizeof(Product);
     }
 
@@ -26,14 +31,14 @@ void create_index(const char *data_filename, const char *index_filename) {
     fclose(index_file);
 }
 
-IndexEntry* binary_search_index(const char *index_filename, int target_key) {
+IndexEntry* binary_search_index(const char *index_filename, unsigned long long target_key) {
     FILE *index_file = fopen(index_filename, "rb");
     if (!index_file) {
         perror("Erro ao abrir arquivo");
         return NULL;
     }
 
-    IndexEntry *result = (IndexEntry*) malloc(sizeof(IndexEntry));
+    IndexEntry result;
     int left = 0;
     fseek(index_file, 0, SEEK_END);
     int right = ftell(index_file) / sizeof(IndexEntry) - 1;
@@ -41,12 +46,14 @@ IndexEntry* binary_search_index(const char *index_filename, int target_key) {
     while (left <= right) {
         int middle = (left + right) / 2;
         fseek(index_file, middle * sizeof(IndexEntry), SEEK_SET);
-        fread(result, sizeof(IndexEntry), 1, index_file);
+        fread(&result, sizeof(IndexEntry), 1, index_file);
 
-        if (result->key == target_key) {
+        if (result.key == target_key) {
             fclose(index_file);
-            return result;
-        } else if (result->key < target_key) {
+            IndexEntry *found_entry = (IndexEntry*) malloc(sizeof(IndexEntry));
+            *found_entry = result;  // Copiar resultado encontrado
+            return found_entry;
+        } else if (result.key < target_key) {
             left = middle + 1;
         } else {
             right = middle - 1;
@@ -57,7 +64,7 @@ IndexEntry* binary_search_index(const char *index_filename, int target_key) {
     return NULL;
 }
 
-void search_with_index(const char *data_filename, const char *index_filename, int target_key) {
+void search_with_index(const char *data_filename, const char *index_filename, unsigned long long target_key) {
     IndexEntry *index_result = binary_search_index(index_filename, target_key);
     if (!index_result) {
         printf("Registro não encontrado.\n");
@@ -67,6 +74,7 @@ void search_with_index(const char *data_filename, const char *index_filename, in
     FILE *data_file = fopen(data_filename, "rb");
     if (!data_file) {
         perror("Erro ao abrir arquivo");
+        free(index_result);
         return;
     }
 
@@ -74,13 +82,13 @@ void search_with_index(const char *data_filename, const char *index_filename, in
     Product p;
     fread(&p, sizeof(Product), 1, data_file);
 
-    printf("Registro encontrado: ID = %d, Marca = %s, Preço = %.2f\n", p.product_id, p.brand, p.price);
+    printf("Registro encontrado: ID = %llu, Marca = %s, Preço = %.2f\n", p.product_id, p.brand, p.price);
 
     fclose(data_file);
     free(index_result);
 }
 
-void remove_product(const char *data_filename, const char *index_filename, int target_id) {
+void remove_product(const char *data_filename, const char *index_filename, unsigned long long target_id) {
     FILE *data_file = fopen(data_filename, "rb");
     FILE *temp_file = fopen("temp.bin", "wb");
     if (!data_file || !temp_file) {
@@ -105,9 +113,9 @@ void remove_product(const char *data_filename, const char *index_filename, int t
     if (found) {
         remove(data_filename);
         rename("temp.bin", data_filename);
-        create_index(data_filename, index_filename); 
+        create_index(data_filename, index_filename);
     } else {
-        printf("Produto com ID %d não encontrado.\n", target_id);
+        printf("Produto com ID %llu não encontrado.\n", target_id);
         remove("temp.bin");
     }
 }
